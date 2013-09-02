@@ -19,39 +19,3 @@
   background-color: #0099FF;
   visibility: visible;
 }
-
-#ob0 {        /* bottom middle bar  */
-  @extend .obj;
-  left: 480px;
-  top: 0px;
-  height: 30px;
-  width: 600px;
-}
-#ob1 {     /* top left bar         */
-  @extend .obj;
-  left: 280px;
-  top: 160px;
-  height: 150px;
-  width: 10px;
-}
-#ob2  {   /* bottom left bar      */
-  @extend .obj;
-  left: 0px;
-  top: 460px;
-  height: 10px;
-  width: 150px;
-}
-#ob3  {  /* left verticle bar  */
-  @extend .obj;
-  left: 280px;
-  top: 460px;
-  height: 155px;
-  width: 10px;
-}
-#ob4 {  /* left horizontal bar */
-  @extend .obj;
-  left: 75px;
-  top:150px;
-  height:10px;
-  width:210px;
-}
