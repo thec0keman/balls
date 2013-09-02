@@ -5,19 +5,100 @@ Balls = (function(){
   grav_counter = 0;
   FRICTION = .05;
   tick_counter = 0; // Counter for ball
-  NUM_OBJECTS = 0;
   BALL_SPEED = 30; // Speed of animation
-  NUM_OF_BALLS = 50;
+  obstacles = null;
+  NUM_OBSTACLES = 0;
   balls = null;
-  objects = null;
+  NUM_OF_BALLS = 50;
   timer = null; // Timer object
-  START_BOTTOM = window.innerHeight - 35;
   BORDER_TOP = 35;
   BORDER_BOT = window.innerHeight + 50;
   BORDER_LEFT = BALL_HEIGHT / 2;
   BORDER_RIGHT = window.innerWidth - 35;
 
-  function SObject( id, obj ) {
+  function Ball( id ){
+    this.id = id;
+    this.x = 0;
+    this.y = BORDER_TOP;
+    this.old_x = 0;
+    this.old_y = 0;
+    this.vel = { up: 0, left: 0 };
+    this.ball_start = 0;
+    this.alive = false;
+    c = ( id >= NUM_OF_BALLS / 2 ) ? "ball yellow" : "ball";
+    this.el = $('<div />', { 'id': "ball" + this.id, 'class': c });
+    $('body').append( this.el );
+  }
+  Ball.prototype.show = function(){
+    this.el.show();
+  };
+  Ball.prototype.hide = function(){
+    this.el.hide();
+    this.alive = false;
+    this.y = 0;
+  };
+  Ball.prototype.draw = function(){
+    $("#ball" +  this.id).offset({ top: this.y, left: this.x });
+  };
+  Ball.prototype.move = function(){
+    if ( this.alive) {
+      if ( !this.el.is(":visible") )
+        this.show();
+      this.old_x = this.x;
+      this.old_y = this.y;
+      this.vel.up -= GRAVITY;
+      if ( Math.abs(this.vel.left) >= FRICTION )
+        this.vel.left += ( this.vel.left > 0 ) ? FRICTION * -1 : FRICTION;
+      else
+        this.vel.left = 0;
+      this.x -= this.vel.left;
+      this.y -= this.vel.up;
+    }
+  };
+  Ball.prototype.check_obstacles = function() {
+    for( g = 0; g < NUM_OBSTACLES; g++ ) {
+      el = obstacles[g];
+      collision = false;
+
+      // First check the bottom of el for hit from below
+      if (( this.x + BALL_HEIGHT >= el.left ) && ( this.x <= el.right )) {
+        if (( this.old_y >= el.bottom ) && ( this.y <= el.bottom )) {
+          this.vel.up *= -.5;
+          this.old_y = el.bottom + 1;
+          this.y = el.bottom + 1;
+          collision = true;
+        }
+        //  Second check the top el for hit from above
+        if (( this.old_y + BALL_HEIGHT <= el.top ) && ( this.y + BALL_HEIGHT >= el.top )) {
+          this.vel.up *= -.5;
+          this.old_y = el.top - BALL_HEIGHT - 1;
+          this.y = el.top - BALL_HEIGHT - 1;
+          collision = true;
+        }
+      } 
+      // check side hits
+      if (( this.y + BALL_HEIGHT >= el.top ) && ( this.y <= el.bottom )) {
+        // right side collision for hit from the left
+        if (( this.old_x > el.right ) && ( this.x <= el.right )) {
+          this.vel.left *= -.5;
+          this.old_x = el.right;
+          this.x = el.right;
+          collision = true;
+        }
+        // left collision for hit from the right
+        if (( this.old_x + BALL_HEIGHT < el.left ) && ( this.x + BALL_HEIGHT >= el.left )) {
+          this.vel.left *= -.5;
+          this.old_x = el.left - BALL_HEIGHT;
+          this.x = el.left - BALL_HEIGHT;
+          collision = true;
+        }
+      }
+      if ( collision ) 
+        g--;
+    }
+  }
+
+  function Obstacle( id, obj ) {
     this.id = "ob" + id;
     this.el = $('<div/>', { 'id': this.id, 'class': 'obj' });
     this.el.offset( obj );
@@ -30,52 +111,15 @@ Balls = (function(){
     this.right = this.left + this.el.width();
   }
 
-
-  function Ball( id ){
-    this.id = "ball" + id;
-    this.x = 0;
-    this.y = BORDER_TOP;
-    this.old_x = 0;
-    this.old_y = 0;
-    this.vel_up = 0;
-    this.vel_left = 0;
-    this.ball_start = 0;
-    this.alive = false;
-    c = ( id > NUM_OF_BALLS / 2 ) ? "ball yellow" : "ball";
-    this.el = $('<div />', { 'id': this.id, 'class': c });
-    $('body').append( this.el );
-  }
-  Ball.prototype.show = function(){
-    this.el.show();
-  };
-  Ball.prototype.hide = function(){
-    this.el.hide();
-  };
-  Ball.prototype.animate = function(){
-    $('#' + this.id).offset({ top: this.y, left: this.x });
-  };
-  Ball.prototype.move = function(){
-    this.old_x = this.x;
-    this.old_y = this.y;
-    this.vel_up -= GRAVITY;
-    if ( Math.abs(this.vel_left) >= FRICTION )
-      this.vel_left += ( this.vel_left > 0 ) ? FRICTION * -1 : FRICTION;
-    else
-      this.vel_left = 0;
-    this.x -= this.vel_left;
-    this.y -= this.vel_up;
-  };
-
   function init() {
-    build_objects();
-    // Initialize Balls
+    build_obstacles();
     balls = new Array(NUM_OF_BALLS);
     for ( t = 0; t < NUM_OF_BALLS; t++ ) 
       balls[t] = new Ball( t );
     init_balls();
   }
 
-  function build_objects() {
+  function build_obstacles() {
     bar = $('.nav_con_top');
     but1 = $('.nav_but_down');
     but2 = $('#reading');
@@ -92,66 +136,55 @@ Balls = (function(){
       { top: but2.offset().top, left: but2.width(), width: 10,               height: but2.height() * 2 } // Mid vert bar
     ];
 
-    NUM_OBJECTS = object_defaults.length;
-    objects = new Array(NUM_OBJECTS);
-      for (var t = 0; t < NUM_OBJECTS; t++)
-        objects[t] = new SObject( t, object_defaults[t] );
+    NUM_OBSTACLES = object_defaults.length;
+    obstacles = new Array(NUM_OBSTACLES);
+    for (var t = 0; t < NUM_OBSTACLES; t++)
+      obstacles[t] = new Obstacle( t, object_defaults[t] );
   }
   
   // Re-initializes all balls, starting from bottom and top, randomized velocities
   function init_balls() {
     for (var t = 0; t < NUM_OF_BALLS; t++) {
-      balls[t].hide();
-
       // only reset balls that have fallen off the screen
       if ( !balls[t].alive ) {
         balls[t].alive = true;
-        balls[t].x = BORDER_RIGHT / 2 + ((Math.random()*200)-100);  // Middle
-        balls[t].vel_up = (Math.random()*10) * -1;  // 1-10
-        balls[t].vel_left = (Math.random()*50) - 25;  // -25 to 25
+        balls[t].vel.up = (Math.random()*10) * -1;  // 1-10
+        balls[t].vel.left = (Math.random()*50) - 25;  // -25 to 25
 
         // First half of balls, top half of screen 
         if ( t < (NUM_OF_BALLS/2) ) {
           balls[t].y = BORDER_TOP;
-          balls[t].ball_start = Math.floor(Math.random()*300);
+          balls[t].x = BORDER_RIGHT / 2 + ((Math.random()*200)-100);  // Middle
+          balls[t].ball_start = Math.floor(Math.random()*100);
         } else { 
         // second half of balls, middle right of screen
-          balls[t].y = START_BOTTOM / 2;   // position halfway up
+          balls[t].y = BORDER_BOT / 2;   // position halfway up
           balls[t].x = BORDER_RIGHT - BALL_HEIGHT;  // position all the way right
-          balls[t].vel_left -= 25;  // all shoot left
-          balls[t].vel_left *= 4;   // shoot faster
-          balls[t].vel_up *= -2.5;  // spread
+          balls[t].vel.left -= 25;  // all shoot left
+          balls[t].vel.left *= 3;   // shoot faster
+          balls[t].vel.up *= -2.5;  // spread
           balls[t].ball_start = 40 + Math.floor(Math.random()*50);
         }
-      balls[t].animate();
       } else {
         // motion to remove stagnant balls
-        balls[t].vel_left = Math.random() * -50;
+        balls[t].vel.left += Math.random() * 50;
       }
     }
   }
 
   // primary function for balls
-  function animate_balls() {
+  function main_loop() {
     if ( GRAVITY > 0 ) {
-      if ( Math.floor(Math.random()*1001) < 2 ) {
+      if ( Math.floor(Math.random()*5001) < 2 ) {
         grav_counter = 0;
         GRAVITY *= -1;
       }
     } else {
-      if ( grav_counter++ > 200 )
+      if ( grav_counter++ > 400 )
         GRAVITY *= -1;
     }
 
-    for (var t = 0; t < NUM_OF_BALLS; t++) {
-      // check if their internal timer is ready for display
-      if ( balls[t].ball_start == 0 ) {
-        balls[t].show();
-        animate_ball(t);
-      } else {
-        balls[t].ball_start--;
-      }
-    }
+    animate_balls();
 
     // Every 200 ticks fling balls off screen
     if ( tick_counter++ > 200 ) {
@@ -161,45 +194,41 @@ Balls = (function(){
   }
 
   // controls motion of ball
-  function animate_ball(num) {
-
-    balls[num].move();
-
-    // falls off screen
-    if ( balls[num].y + BALL_HEIGHT > BORDER_BOT ) {
-      balls[num].vel_up = 0;
-      balls[num].vel_left = 0;
-      balls[num].y = BORDER_BOT + BALL_HEIGHT;
-      balls[num].hide();
-      balls[num].alive = false;
+  function animate_balls() {
+    for (var t = 0; t < NUM_OF_BALLS; t++) {
+      if ( balls[t].ball_start > 0 ) {
+        balls[t].ball_start--;
+      } else if ( balls[t].alive ) {
+        balls[t].move();
+        if ( balls[t].y + BALL_HEIGHT > BORDER_BOT )
+          balls[t].hide();
+        balls[t].check_obstacles();
+        collision_detect(t);
+        balls[t].draw();
+      }
     }
+  }
 
-    // Check the obstacles
-    for ( var t = 0; t < NUM_OBJECTS; t++ )
-      if ( obstacles(objects[t], num) == COLLISION )
-        t--;
-    // Check collisions
-    collision_detect(num);
- 
-    balls[num].animate();
+  function distance_calc( b1, b2 ){
+    var x_distance = b1.x - b2.x;
+    var y_distance = b1.y - b2.y;
+    return parseInt( Math.sqrt( Math.pow( x_distance, 2 ) + Math.pow( y_distance, 2 ) ) );
   }
 
   function collision_detect(num) {
     for (var g = 0; g < NUM_OF_BALLS; g++) {
+
       // don't scan self or inactives
-      if ((g != num) && (balls[g].alive)) {
-        var x_distance = balls[g].x - balls[num].x;
-        var y_distance = balls[g].y - balls[num].y;
-        var distance = parseInt( Math.sqrt( Math.pow( x_distance, 2 ) + Math.pow( y_distance, 2 ) ) );
+      if ((g != num) && (balls[g].alive) ) {
 
-        if ( (distance >= -BALL_HEIGHT - 1) && (distance <= BALL_HEIGHT + 1) ) {
+        distance = distance_calc( balls[num], balls[g] );
+        if ( (distance > -BALL_HEIGHT ) && (distance < BALL_HEIGHT ) ) {
+
           // store current velocities
-          var up1 = balls[num].vel_up;
-          var left1 = balls[num].vel_left;
-          var up2 = balls[g].vel_up;
-          var left2 = balls[g].vel_left;
-
-          // stop the collision (move the balls back, proportionately along both velocities)
+          var up1 = balls[num].vel.up;
+          var left1 = balls[num].vel.left;
+          var up2 = balls[g].vel.up;
+          var left2 = balls[g].vel.left;
 
           // proportions each axis needs to move
           var total_ball1 = Math.abs(up1) + Math.abs(left1);
@@ -232,76 +261,29 @@ Balls = (function(){
           
           // exchange all velocities (same as inverting & transferring energy)
           // before swapping velocities, need to check obstacles
-          for ( t = 0; t < NUM_OBJECTS; t++ )
-            if ( obstacles(objects[t], num) == 5 ) 
-              t--;
-          balls[num].vel_up = up2;
-          balls[num].vel_left = left2;
-
-          for ( t=0; t < NUM_OBJECTS; t++ )
-            if ( obstacles(objects[t], g) == 5 )
-              t--;
-          balls[g].vel_up = up1;
-          balls[g].vel_left = left1;
+          balls[num].vel = { up: up2, left: left2 };
+          balls[g].vel = { up: up1, left: left1 };
+          balls[num].check_obstacles();
+          balls[g].check_obstacles();
 
           // roll
-          if ( Math.abs(balls[num].vel_left) < .1 ) {
-            // num is on top of g
-            if ( balls[num].y < balls[g].y ) {
-              mod = (( balls[num].x + 7 ) >= ( balls[g].x + 7 )) ? 1 : -1;
-              balls[num].vel_left += (.2 * mod);
-              balls[g].vel_left -= (.2 * mod);
-            }
+          if ( Math.abs(balls[num].vel.left) < .2  || Math.abs(balls[g].vel.left) < .2 ) {
+            top_ball = ( balls[num].y > balls[g].y ) ? balls[num] : balls[g];
+            bot_ball = ( balls[num].y < balls[g].y ) ? balls[num] : balls[g];
+            roll_dir = ( top_ball.x <= bot_ball.x ) ? .1 : -.1;
+            top_ball.vel.left += ( GRAVITY * roll_dir);
+            bot_ball.vel.left -= ( GRAVITY * roll_dir);
           }
         }
       }
     }
   }
 
-  function obstacles(el, num) {
-    // First check the bottom of el for hit from below
-    if (( balls[num].x + BALL_HEIGHT >= el.left ) && ( balls[num].x <= el.right )) {
-      if (( balls[num].old_y >= el.bottom ) && ( balls[num].y <= el.bottom )) {
-        balls[num].vel_up *= -.5;
-        balls[num].old_y = el.bottom + 1;
-        balls[num].y = el.bottom + 1;
-        return COLLISION;
-      }
 
-    //  Second check the top el for hit from above
-      if (( balls[num].old_y + BALL_HEIGHT <= el.top ) && ( balls[num].y + BALL_HEIGHT >= el.top )) {
-        balls[num].vel_up *= -.5;
-        balls[num].old_y = el.top - BALL_HEIGHT - 1;
-        balls[num].y = el.top - BALL_HEIGHT - 1;
-        return COLLISION;
-      }
-    }
-
-    // check side hits
-    if (( balls[num].y + BALL_HEIGHT >= el.top ) && ( balls[num].y <= el.bottom )) {
-      // right side collision for hit from the left
-      if (( balls[num].old_x > el.right ) && ( balls[num].x <= el.right )) {
-        balls[num].vel_left *= -.5;
-        balls[num].old_x = el.right;
-        balls[num].x = el.right;
-        return COLLISION;
-      }
-      // left collision for hit from the right
-      if (( balls[num].old_x + BALL_HEIGHT < el.left ) && ( balls[num].x + BALL_HEIGHT >= el.left )) {
-        balls[num].vel_left *= -.5;
-        balls[num].old_x = el.left - BALL_HEIGHT;
-        balls[num].x = el.left - BALL_HEIGHT;
-        return COLLISION;
-      }
-    }
-
-    return 0;
-  }
-  
   return {
     start: function(){
       init();
-      timer = setInterval( function(){ animate_balls(); }, BALL_SPEED);
+      timer = setInterval( function(){ main_loop(); }, BALL_SPEED);
     },
     stop: function(){
       clearInterval(timer);
