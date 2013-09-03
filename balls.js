@@ -3,7 +3,7 @@ Balls = (function(){
   COLLISION = 5; // Flag for collision
   GRAVITY = 1; // Gravity constant, never changes
   grav_counter = 0;
-  FRICTION = .05;
+  FRICTION = .02;
   tick_counter = 0; // Counter for ball
   BALL_SPEED = 30; // Speed of animation
   obstacles = null;
@@ -56,9 +56,10 @@ Balls = (function(){
     }
   };
   Ball.prototype.check_obstacles = function() {
+    collision = false;
     for( g = 0; g < NUM_OBSTACLES; g++ ) {
       el = obstacles[g];
-      collision = false;
+      col_loop = false;
 
       // First check the bottom of el for hit from below
       if (( this.x + BALL_HEIGHT >= el.left ) && ( this.x <= el.right )) {
@@ -66,14 +67,14 @@ Balls = (function(){
           this.vel.up *= -.5;
           this.old_y = el.bottom + 1;
           this.y = el.bottom + 1;
-          collision = true;
+          collision = col_loop = true;
         }
         //  Second check the top el for hit from above
         if (( this.old_y + BALL_HEIGHT <= el.top ) && ( this.y + BALL_HEIGHT >= el.top )) {
           this.vel.up *= -.5;
           this.old_y = el.top - BALL_HEIGHT - 1;
           this.y = el.top - BALL_HEIGHT - 1;
-          collision = true;
+          collision = col_loop = true;
         }
       } 
       // check side hits
@@ -83,19 +84,20 @@ Balls = (function(){
           this.vel.left *= -.5;
           this.old_x = el.right;
           this.x = el.right;
-          collision = true;
+          collision = col_loop = true;
         }
         // left collision for hit from the right
         if (( this.old_x + BALL_HEIGHT < el.left ) && ( this.x + BALL_HEIGHT >= el.left )) {
           this.vel.left *= -.5;
           this.old_x = el.left - BALL_HEIGHT;
           this.x = el.left - BALL_HEIGHT;
-          collision = true;
+          collision = col_loop = true;
         }
       }
-      if ( collision ) 
+      if ( col_loop ) 
         g--;
     }
+    return collision;
   }
 
   function Obstacle( id, obj ) {
@@ -225,46 +227,15 @@ Balls = (function(){
         if ( (distance > -BALL_HEIGHT ) && (distance < BALL_HEIGHT ) ) {
 
           // store current velocities
-          var up1 = balls[num].vel.up;
-          var left1 = balls[num].vel.left;
-          var up2 = balls[g].vel.up;
-          var left2 = balls[g].vel.left;
+          var b1 = balls[num].vel;
+          var b2 = balls[g].vel;
 
-          // proportions each axis needs to move
-          var total_ball1 = Math.abs(up1) + Math.abs(left1);
-          var percent_x1 = Math.abs(left1) / total_ball1;
-          var percent_y1 = Math.abs(up1) / total_ball1;
-          var total_ball2 = Math.abs(up2) + Math.abs(left2);
-          var percent_x2 = Math.abs(left2) / total_ball2;
-          var percent_y2 = Math.abs(up2) / total_ball2;
+          unmerge_balls( balls[num], balls[g]);
 
-          // proportions each ball needs to move
-          var pixels_to_move = BALL_HEIGHT - Math.abs(distance);  // total pixels to move
-          var percent_ball1 = total_ball1 / ( total_ball1 + total_ball2 );
-          var percent_ball2 = total_ball2 / ( total_ball1 + total_ball2 );
-
-          // Translate reflections
-          if ( balls[num].x > balls[g].x )
-            percent_x2 *= -1;
-          if ( balls[num].x < balls[g].x )
-            percent_x1 += -1;
-          if ( balls[num].y > balls[g].y )
-            percent_y2 *= -1;
-          if ( balls[num].y < balls[g].y )
-            percent_y1 += -1;
-
-          // num pixels * proportion of ball * percent of axis
-          balls[num].x += pixels_to_move * percent_ball1 * percent_x1;
-          balls[num].y += pixels_to_move * percent_ball1 * percent_y1;
-          balls[g].x += pixels_to_move * percent_ball2 * percent_x2;
-          balls[g].y += pixels_to_move * percent_ball2 * percent_y2;
-          
           // exchange all velocities (same as inverting & transferring energy)
           // before swapping velocities, need to check obstacles
-          balls[num].vel = { up: up2, left: left2 };
-          balls[g].vel = { up: up1, left: left1 };
-          balls[num].check_obstacles();
-          balls[g].check_obstacles();
+          balls[num].vel = b2;
+          balls[g].vel = b1;
 
           // roll
           if ( Math.abs(balls[num].vel.left) < .2  || Math.abs(balls[g].vel.left) < .2 ) {
@@ -274,11 +245,46 @@ Balls = (function(){
             top_ball.vel.left += ( GRAVITY * roll_dir);
             bot_ball.vel.left -= ( GRAVITY * roll_dir);
           }
+
+          // Finally make sure we haven't hit anything (and if we have reset the loop)
+          if ( balls[num].check_obstacles() || balls[g].check_obstacles() )
+            g--;
         }
       }
     }
   }
 
+  function unmerge_balls( b1, b2 ){
+    // TODO: When moving a ball should this affect its velocity?
+    // proportions each axis needs to move
+    var total_ball1 = Math.abs( b1.vel.up ) + Math.abs( b1.vel.left );
+    var percent_x1 = Math.abs( b1.vel.left ) / total_ball1;
+    var percent_y1 = Math.abs( b1.vel.up ) / total_ball1;
+    var total_ball2 = Math.abs( b2.vel.up ) + Math.abs( b2.vel.left );
+    var percent_x2 = Math.abs( b2.vel.left ) / total_ball2;
+    var percent_y2 = Math.abs( b2.vel.up ) / total_ball2;
+
+    // proportions each ball needs to move
+    var pixels_to_move = BALL_HEIGHT - Math.abs(distance);  // total pixels to move
+    var percent_ball1 = total_ball1 / ( total_ball1 + total_ball2 );
+    var percent_ball2 = total_ball2 / ( total_ball1 + total_ball2 );
+
+    // Translate reflections
+    if ( b1.x > b2.x )
+      percent_x2 *= -1;
+    if ( b1.x < b2.x )
+      percent_x1 += -1;
+    if ( b1.y > b2.y )
+      percent_y2 *= -1;
+    if ( b1.y < b2.y )
+      percent_y1 += -1;
+
+    // num pixels * proportion of ball * percent of axis
+    b1.x += pixels_to_move * percent_ball1 * percent_x1;
+    b1.y += pixels_to_move * percent_ball1 * percent_y1;
+    b2.x += pixels_to_move * percent_ball2 * percent_x2;
+    b2.y += pixels_to_move * percent_ball2 * percent_y2;
+  }
 
   return {
     start: function(){
